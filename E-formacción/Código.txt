@@ -1,0 +1,708 @@
+import React, { useState, useEffect } from 'react';
+import { initializeApp } from 'firebase/app';
+import { 
+  getFirestore, 
+  collection, 
+  doc, 
+  addDoc, 
+  onSnapshot, 
+  deleteDoc,
+  updateDoc,
+  query,
+  setDoc
+} from 'firebase/firestore';
+import { 
+  getAuth, 
+  signInAnonymously, 
+  signInWithCustomToken, 
+  onAuthStateChanged 
+} from 'firebase/auth';
+import { 
+  Newspaper, 
+  LogOut,
+  Users,
+  UserPlus,
+  GraduationCap,
+  Sparkles,
+  Mail,
+  Trash2,
+  PlusCircle,
+  X,
+  Headset,
+  BookOpen,
+  Download,
+  ChevronRight,
+  Video,
+  FileCheck,
+  Globe,
+  Pencil,
+  CalendarDays,
+  AlarmClock,
+  Link2,
+  Rocket
+} from 'lucide-react';
+
+// --- CONFIGURACIÓN FIREBASE ---
+const firebaseConfig = JSON.parse(__firebase_config);
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'e-formacion-pro';
+
+// --- CONSTANTES ---
+const LOGO_URL = "https://lh3.googleusercontent.com/d/134alSdlXnIMpFW7vcKaTF2lR6WtpwLku"; 
+
+const COLORS = {
+  primary: '#f39200',
+  secondary: '#4c1d95',
+  accent: '#f7a833',   
+  bg: '#fdfdfd',
+  text: '#1e293b'
+};
+
+const TIPO_MATERIAL = {
+  TEMA: { label: 'Temario', icon: <BookOpen className="w-5 h-5" />, color: 'bg-blue-50 text-blue-600' },
+  EXAMEN: { label: 'Exámenes', icon: <FileCheck className="w-5 h-5" />, color: 'bg-green-50 text-green-600' },
+  VIDEO: { label: 'Vídeos', icon: <Video className="w-5 h-5" />, color: 'bg-red-50 text-red-600' },
+  ENLACE: { label: 'Enlaces de interés', icon: <Globe className="w-5 h-5" />, color: 'bg-purple-50 text-purple-600' }
+};
+
+const CONTACTO = {
+  telefono: "+34 662 161 472",
+  email: "veronicamaringadea@gmail.com",
+};
+
+// --- COMPONENTES AUXILIARES ---
+const WhatsAppIcon = ({ className }) => (
+  <svg viewBox="0 0 24 24" className={className || "w-6 h-6 fill-current"} xmlns="http://www.w3.org/2000/svg">
+    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L0 24l6.335-1.662c1.72.94 3.659 1.437 5.634 1.437h.005c6.558 0 11.894-5.335 11.897-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
+  </svg>
+);
+
+const Modal = ({ title, children, onClose }) => (
+  <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-sm">
+    <div className="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl overflow-hidden">
+      <div className="p-8 border-b border-slate-100 flex justify-between items-center">
+        <h3 className="text-xl font-bold text-slate-800 uppercase tracking-tight">{title}</h3>
+        <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-400"><X/></button>
+      </div>
+      <div className="p-8 max-h-[70vh] overflow-y-auto">{children}</div>
+    </div>
+  </div>
+);
+
+// --- COMPONENTE PRINCIPAL ---
+export default function App() {
+  const [user, setUser] = useState(null); 
+  const [loggedInUser, setLoggedInUser] = useState(null); 
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [activeTab, setActiveTab] = useState('noticias');
+  const [selectedOpo, setSelectedOpo] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [showLogin, setShowLogin] = useState(false); 
+  
+  const [loginForm, setLoginForm] = useState({ username: '', password: '' });
+  const [error, setError] = useState('');
+
+  // Estados de datos
+  const [noticias, setNoticias] = useState([]);
+  const [categoriasOposicion, setCategoriasOposicion] = useState([]);
+  const [proximosCursos, setProximosCursos] = useState([]);
+  const [listaAlumnos, setListaAlumnos] = useState([]);
+  const [documentos, setDocumentos] = useState([]);
+  
+  const [showModal, setShowModal] = useState(null); 
+  const [editingId, setEditingId] = useState(null);
+  const [formData, setFormData] = useState({
+    titulo: '', contenido: '', url: '', nombre: '', descripcion: '', 
+    tipo: 'TEMA', username: '', password: '', oposicion: '', fecha: '', lanzamiento: ''
+  });
+
+  // Autenticación inicial
+  useEffect(() => {
+    const initAuth = async () => {
+      try {
+        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+          await signInWithCustomToken(auth, __initial_auth_token);
+        } else {
+          await signInAnonymously(auth);
+        }
+      } catch (err) {
+        console.error("Error de Auth:", err);
+      }
+    };
+    initAuth();
+    const unsubscribe = onAuthStateChanged(auth, (u) => {
+      setUser(u);
+      setLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Suscripción a datos (Firestore)
+  useEffect(() => {
+    if (!user) return;
+
+    const listeners = [
+      onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'noticias'), 
+        (snap) => setNoticias(snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))),
+        (err) => console.error("Error Noticias:", err)
+      ),
+      onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'categorias'), 
+        (snap) => setCategoriasOposicion(snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))),
+        (err) => console.error("Error Categorias:", err)
+      ),
+      onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'proximos'), 
+        (snap) => setProximosCursos(snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))),
+        (err) => console.error("Error Proximos:", err)
+      ),
+      onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'usuarios'), 
+        (snap) => setListaAlumnos(snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))),
+        (err) => console.error("Error Usuarios:", err)
+      ),
+      onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'documentacion'), 
+        (snap) => setDocumentos(snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))),
+        (err) => console.error("Error Docs:", err)
+      )
+    ];
+
+    return () => listeners.forEach(unsub => unsub());
+  }, [user]);
+
+  const resetFormData = () => {
+    setFormData({ titulo: '', contenido: '', url: '', nombre: '', descripcion: '', tipo: 'TEMA', username: '', password: '', oposicion: '', fecha: '', lanzamiento: '' });
+    setEditingId(null);
+  };
+
+  const handleLogin = (e) => {
+    e.preventDefault();
+    setError('');
+    if (loginForm.username === 'admin' && loginForm.password === '22112008') { 
+      setIsAdmin(true); 
+      setLoggedInUser({ nombre: 'Administradora', username: 'admin' }); 
+      return; 
+    }
+    const alumno = listaAlumnos.find(a => a.username === loginForm.username && a.password === loginForm.password);
+    if (alumno) { 
+      setIsAdmin(false); 
+      setLoggedInUser(alumno); 
+    } else { 
+      setError('Credenciales incorrectas'); 
+    }
+  };
+
+  const handleDelete = async (col, id) => { 
+    if (isAdmin && window.confirm('¿Eliminar definitivamente?')) {
+      await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', col, id)); 
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-white">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-12 h-12 border-4 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
+          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Cargando...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // --- CABECERA COMÚN ---
+  const CommonHeader = ({ rightElement }) => (
+    <header className="bg-white border-b-2 border-slate-100 px-6 py-6 md:px-16 flex items-center justify-between sticky top-0 z-50">
+      <div className="flex items-center gap-6 md:gap-10">
+        <img 
+          src={LOGO_URL} 
+          alt="Logo" 
+          className="h-20 md:h-28 w-auto cursor-pointer transition-transform hover:scale-105 active:scale-95" 
+          onClick={() => { if(!loggedInUser) setShowLogin(false); }}
+        />
+        <div className="hidden sm:block border-l-2 border-slate-100 pl-10">
+          <h1 className="text-lg md:text-2xl font-black tracking-[0.15em] text-slate-900 uppercase leading-none">
+            Plataforma de<br/>
+            <span className="text-orange-500">Formación Online</span>
+          </h1>
+        </div>
+      </div>
+      {rightElement}
+    </header>
+  );
+
+  // --- VISTA PÚBLICA / LOGIN ---
+  if (!loggedInUser) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-900">
+        <CommonHeader 
+          rightElement={
+            <button 
+              onClick={() => setShowLogin(!showLogin)} 
+              className="px-8 py-4 rounded-2xl font-black text-xs uppercase tracking-widest text-white shadow-xl hover:brightness-110 active:scale-95 transition-all" 
+              style={{ backgroundColor: showLogin ? COLORS.secondary : COLORS.primary }}
+            >
+              {showLogin ? "Volver al Inicio" : "Acceso Alumnos"}
+            </button>
+          }
+        />
+
+        <main className="flex-1">
+          {showLogin ? (
+            <div className="py-20 flex justify-center px-6">
+              <div className="w-full max-w-md bg-white p-12 rounded-[3rem] shadow-2xl border border-slate-100">
+                <div className="text-center mb-10">
+                    <h2 className="text-3xl font-black uppercase tracking-tight text-slate-900">Bienvenido/a</h2>
+                    <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mt-2">Introduce tus credenciales</p>
+                </div>
+                <form onSubmit={handleLogin} className="space-y-6">
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase ml-4 mb-2 block">Usuario</label>
+                    <input className="w-full p-5 bg-slate-50 border-2 border-transparent focus:border-orange-500/20 focus:bg-white rounded-3xl outline-none transition-all text-slate-700 font-bold" value={loginForm.username} onChange={e => setLoginForm({...loginForm, username: e.target.value})} required />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase ml-4 mb-2 block">Contraseña</label>
+                    <input type="password" className="w-full p-5 bg-slate-50 border-2 border-transparent focus:border-orange-500/20 focus:bg-white rounded-3xl outline-none transition-all text-slate-700 font-bold" value={loginForm.password} onChange={e => setLoginForm({...loginForm, password: e.target.value})} required />
+                  </div>
+                  {error && <div className="text-red-500 text-xs font-black text-center bg-red-50 p-3 rounded-xl uppercase">{error}</div>}
+                  <button type="submit" className="w-full text-white py-5 rounded-3xl font-black text-lg shadow-xl hover:brightness-110 transition-all uppercase tracking-widest" style={{ backgroundColor: COLORS.primary }}>Entrar al Campus</button>
+                </form>
+              </div>
+            </div>
+          ) : (
+            <div className="max-w-7xl mx-auto px-6 py-16 grid grid-cols-1 lg:grid-cols-12 gap-16">
+                <div className="lg:col-span-8 space-y-16">
+                  <section>
+                    <h2 className="text-3xl font-black text-slate-900 uppercase tracking-tighter mb-10 border-b-8 border-orange-500 inline-block">Tablón de Noticias</h2>
+                    <div className="space-y-8">
+                      {noticias.length > 0 ? noticias.sort((a,b) => b.timestamp - a.timestamp).slice(0, 3).map((n) => (
+                        <article key={n.id} className="group bg-white p-10 rounded-[2.5rem] shadow-sm border border-slate-100 hover:shadow-2xl hover:border-orange-200 transition-all duration-300">
+                          <span className="px-4 py-1.5 rounded-full bg-orange-50 text-orange-600 text-[10px] font-black uppercase tracking-widest">{n.date}</span>
+                          <h3 className="text-2xl font-black my-4 group-hover:text-orange-600 transition-colors">{n.titulo}</h3>
+                          <p className="text-slate-500 text-base leading-relaxed mb-8 line-clamp-3">{n.contenido}</p>
+                          {n.url && (
+                            <a href={n.url} target="_blank" className="inline-flex items-center gap-3 text-xs font-black uppercase tracking-[0.2em] text-slate-900 group-hover:text-orange-500 transition-colors">
+                              Seguir leyendo <ChevronRight className="w-5 h-5" />
+                            </a>
+                          )}
+                        </article>
+                      )) : (
+                          <div className="p-20 text-center text-slate-300 font-bold bg-white rounded-[3rem] border-4 border-dashed border-slate-100 uppercase text-sm tracking-[0.3em]">No hay noticias publicadas</div>
+                      )}
+                    </div>
+                  </section>
+
+                  <section>
+                    <h2 className="text-3xl font-black text-slate-900 uppercase tracking-tighter mb-10 border-b-8 border-orange-500 inline-block">Nuestros Cursos</h2>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        {categoriasOposicion.map((curso) => (
+                            <div key={curso.id} className="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-sm hover:shadow-2xl transition-all group relative overflow-hidden">
+                                {curso.lanzamiento && (
+                                  <div className="absolute top-0 right-0 p-4">
+                                    <span className="bg-orange-100 text-orange-600 px-4 py-1 rounded-full text-[9px] font-black uppercase tracking-widest flex items-center gap-2">
+                                      <Rocket className="w-3 h-3" /> {curso.lanzamiento}
+                                    </span>
+                                  </div>
+                                )}
+                                <div className="flex items-center gap-6 mb-6">
+                                    <div className="p-5 bg-orange-50 rounded-[1.5rem] text-orange-500 group-hover:bg-orange-500 group-hover:text-white transition-all"><BookOpen className="w-8 h-8" /></div>
+                                    <h3 className="text-xl font-black leading-tight uppercase text-slate-900">{curso.nombre}</h3>
+                                </div>
+                                <p className="text-slate-400 text-sm mb-10 leading-relaxed line-clamp-3">{curso.descripcion || "Formación especializada diseñada para maximizar tus resultados."}</p>
+                                <div className="flex items-center justify-end">
+                                    <ChevronRight className="w-6 h-6 text-slate-200 group-hover:text-orange-500 transition-colors" />
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                  </section>
+                </div>
+
+                <aside className="lg:col-span-4 space-y-12">
+                  <section className="bg-white p-10 rounded-[3rem] shadow-xl border border-slate-100">
+                    <h3 className="text-xl font-black uppercase mb-8 flex items-center gap-4 text-slate-900"><AlarmClock className="w-6 h-6 text-orange-500" /> Próximas Fechas</h3>
+                    <div className="space-y-6">
+                        {proximosCursos.length > 0 ? proximosCursos.sort((a,b) => b.timestamp - a.timestamp).map(p => (
+                            <div key={p.id} className="p-6 rounded-3xl bg-slate-50 border border-slate-100 flex justify-between items-center group hover:bg-white hover:border-orange-100 transition-all">
+                                <div>
+                                    <h4 className="font-black text-sm uppercase text-slate-800">{p.nombre}</h4>
+                                    <p className="text-[10px] font-black text-orange-500 uppercase mt-1 tracking-widest">{p.fecha}</p>
+                                </div>
+                            </div>
+                        )) : (
+                            <p className="text-xs text-slate-300 text-center py-6 uppercase font-black tracking-widest italic">Anuncios en breve...</p>
+                        )}
+                    </div>
+                  </section>
+
+                  <button onClick={() => setShowModal('contacto')} className="w-full p-12 rounded-[3rem] shadow-2xl text-white text-center hover:scale-[1.02] active:scale-95 transition-all group overflow-hidden relative" style={{ backgroundColor: COLORS.secondary }}>
+                    <div className="absolute top-0 right-0 p-4 opacity-10"><Sparkles className="w-20 h-20" /></div>
+                    <Headset className="w-16 h-16 mx-auto mb-6 group-hover:rotate-12 transition-transform" />
+                    <h3 className="text-4xl font-black uppercase tracking-tight">¿Alguna Pregunta?</h3>
+                    <p className="text-white/60 font-black text-xs mt-4 uppercase tracking-[0.3em]">Estamos aquí para ayudarte</p>
+                  </button>
+                </aside>
+            </div>
+          )}
+        </main>
+        
+        {showModal === 'contacto' && (
+          <Modal title="Vías de Contacto" onClose={() => setShowModal(null)}>
+            <div className="space-y-6 py-4">
+              <div className="p-8 bg-green-50 rounded-[2.5rem] border border-green-100 text-center group hover:border-green-300 transition-all">
+                <WhatsAppIcon className="w-12 h-12 mx-auto mb-6 text-green-500" />
+                <a href={`https://wa.me/${CONTACTO.telefono.replace(/\s/g, '')}`} target="_blank" className="font-black text-3xl text-slate-900">{CONTACTO.telefono}</a>
+                <p className="text-[10px] font-black text-green-600 uppercase mt-3 tracking-widest">Escríbenos por WhatsApp</p>
+              </div>
+              <div className="p-8 bg-slate-50 rounded-[2.5rem] border border-slate-100 text-center group hover:border-slate-300 transition-all">
+                <Mail className="w-12 h-12 mx-auto mb-6 text-slate-900" />
+                <a href={`mailto:${CONTACTO.email}`} className="font-black text-base text-slate-900 break-all">{CONTACTO.email}</a>
+                <p className="text-[10px] font-black text-slate-400 uppercase mt-3 tracking-widest">Envíanos un Correo</p>
+              </div>
+            </div>
+          </Modal>
+        )}
+      </div>
+    );
+  }
+
+  // --- VISTA PRIVADA ---
+  return (
+    <div className="min-h-screen bg-[#f8fafc] flex flex-col font-sans">
+      <CommonHeader 
+        rightElement={
+          <div className="flex items-center gap-6">
+            <div className="flex items-center gap-4 bg-slate-50 px-6 py-3 rounded-2xl border-2 border-slate-100">
+              <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-black text-sm shadow-lg" style={{ backgroundColor: COLORS.secondary }}>{loggedInUser.nombre.charAt(0)}</div>
+              <p className="text-xs font-black uppercase tracking-widest text-slate-900">{loggedInUser.nombre}</p>
+            </div>
+            <button onClick={() => { setLoggedInUser(null); setIsAdmin(false); setShowLogin(false); }} className="p-3 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-2xl transition-all"><LogOut className="w-6 h-6" /></button>
+          </div>
+        }
+      />
+
+      <div className="flex flex-1">
+        <nav className="w-72 bg-white border-r-2 border-slate-100 p-8 flex flex-col gap-3">
+          <button onClick={() => { setActiveTab('noticias'); setSelectedOpo(null); }} className={`flex items-center gap-4 p-5 rounded-2xl font-black text-xs tracking-widest transition-all ${activeTab === 'noticias' ? 'text-white bg-orange-500 shadow-xl shadow-orange-500/20' : 'text-slate-400 hover:bg-slate-50'}`}><Newspaper className="w-5 h-5" /> TABLÓN</button>
+          
+          {isAdmin && (
+            <>
+              <button onClick={() => { setActiveTab('cursos'); setSelectedOpo(null); }} className={`flex items-center gap-4 p-5 rounded-2xl font-black text-xs tracking-widest transition-all ${activeTab === 'cursos' ? 'text-white bg-orange-500 shadow-xl shadow-orange-500/20' : 'text-slate-400 hover:bg-slate-50'}`}><GraduationCap className="w-5 h-5" /> GESTIÓN</button>
+              <button onClick={() => { setActiveTab('alumnos'); setSelectedOpo(null); }} className={`flex items-center gap-4 p-5 rounded-2xl font-black text-xs tracking-widest transition-all ${activeTab === 'alumnos' ? 'text-white bg-orange-500 shadow-xl shadow-orange-500/20' : 'text-slate-400 hover:bg-slate-50'}`}><Users className="w-5 h-5" /> ALUMNOS</button>
+            </>
+          )}
+
+          <div className="mt-12 mb-6 text-[10px] font-black text-slate-300 uppercase tracking-[0.3em] px-5">Materiales</div>
+          <div className="space-y-2">
+            {categoriasOposicion.filter(cat => isAdmin || loggedInUser.oposicion === cat.nombre || loggedInUser.oposicion === 'Todas').map(cat => (
+                <button key={cat.id} onClick={() => { setActiveTab('oposicion'); setSelectedOpo(cat.nombre); }} className={`w-full text-left p-5 rounded-2xl font-black text-[10px] tracking-widest transition-all flex items-center justify-between ${selectedOpo === cat.nombre ? 'bg-orange-50 text-orange-600 border border-orange-100' : 'text-slate-400 hover:bg-slate-50'}`}>
+                <span className="truncate uppercase">{cat.nombre}</span>
+                <ChevronRight className={`w-4 h-4 transition-transform ${selectedOpo === cat.nombre ? 'translate-x-1' : ''}`} />
+                </button>
+            ))}
+          </div>
+        </nav>
+
+        <main className="flex-1 p-16 overflow-y-auto bg-white/40">
+          {activeTab === 'noticias' && (
+            <div className="max-w-5xl mx-auto space-y-8">
+              <div className="flex justify-between items-center mb-12">
+                <h2 className="text-4xl font-black uppercase tracking-tight text-slate-900">Actualidad del Campus</h2>
+                {isAdmin && <button onClick={() => { resetFormData(); setShowModal('noticia'); }} className="bg-orange-500 text-white px-8 py-4 rounded-2xl font-black uppercase text-xs tracking-[0.2em] shadow-2xl shadow-orange-500/30 flex items-center gap-3 hover:scale-105 active:scale-95 transition-all"><PlusCircle className="w-5 h-5" /> Nueva Noticia</button>}
+              </div>
+              <div className="grid grid-cols-1 gap-8">
+                  {noticias.sort((a,b) => b.timestamp - a.timestamp).map(n => (
+                    <div key={n.id} className="bg-white p-12 rounded-[3rem] border border-slate-100 shadow-sm relative group hover:shadow-2xl transition-all">
+                      <span className="text-[10px] font-black text-orange-500 uppercase tracking-[0.3em] bg-orange-50 px-4 py-2 rounded-xl">{n.date}</span>
+                      <h4 className="font-black text-3xl mt-6 mb-6 text-slate-900">{n.titulo}</h4>
+                      <p className="text-slate-500 text-lg leading-relaxed mb-8">{n.contenido}</p>
+                      {n.url && (
+                        <a href={n.url} target="_blank" className="inline-flex items-center gap-3 text-xs font-black text-orange-600 hover:underline tracking-widest uppercase">
+                          <Link2 className="w-4 h-4" /> Material Adicional
+                        </a>
+                      )}
+                      {isAdmin && <button onClick={() => handleDelete('noticias', n.id)} className="absolute top-12 right-12 p-3 text-slate-200 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"><Trash2 className="w-5 h-5" /></button>}
+                    </div>
+                  ))}
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'cursos' && isAdmin && (
+            <div className="max-w-5xl mx-auto space-y-20">
+               <div>
+                 <div className="flex justify-between items-center mb-12">
+                    <h2 className="text-4xl font-black uppercase tracking-tight text-slate-900">Cursos Activos</h2>
+                    <button onClick={() => { resetFormData(); setShowModal('curso'); }} className="bg-orange-500 text-white px-8 py-4 rounded-2xl font-black uppercase text-xs tracking-widest flex items-center gap-3 shadow-2xl shadow-orange-500/30 hover:scale-105 transition-all"><PlusCircle className="w-5 h-5" /> Crear Curso</button>
+                 </div>
+                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {categoriasOposicion.map(cat => (
+                      <div key={cat.id} className="bg-white p-10 rounded-[2.5rem] border-2 border-slate-50 shadow-sm flex justify-between items-center group hover:border-orange-100 transition-all">
+                          <div>
+                            <h3 className="font-black text-slate-900 uppercase text-lg">{cat.nombre}</h3>
+                            <div className="flex items-center gap-2 mt-2">
+                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{cat.descripcion ? 'Configurado' : 'Sin descripción'}</span>
+                                {cat.lanzamiento && (
+                                    <span className="text-[9px] font-black text-orange-500 uppercase tracking-widest ml-2">• Lanzamiento: {cat.lanzamiento}</span>
+                                )}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-4">
+                            <button onClick={() => { setEditingId(cat.id); setFormData({...cat}); setShowModal('curso'); }} className="p-4 text-slate-200 hover:text-orange-500 hover:bg-orange-50 rounded-2xl transition-all"><Pencil className="w-5 h-5" /></button>
+                            <button onClick={() => handleDelete('categorias', cat.id)} className="p-4 text-slate-200 hover:text-red-500 hover:bg-red-50 rounded-2xl transition-all"><Trash2 className="w-5 h-5" /></button>
+                          </div>
+                      </div>
+                    ))}
+                 </div>
+               </div>
+
+               <div className="bg-slate-50 p-12 rounded-[3.5rem] border border-slate-100">
+                 <div className="flex justify-between items-center mb-10">
+                    <h2 className="text-3xl font-black uppercase tracking-tight text-slate-900">Agenda Próximas Fechas</h2>
+                    <button onClick={() => { resetFormData(); setShowModal('proximo'); }} className="bg-orange-500 text-white px-6 py-3 rounded-xl font-black uppercase text-[10px] tracking-widest flex items-center gap-3 shadow-xl shadow-orange-500/20"><CalendarDays className="w-4 h-4" /> Nuevo Evento</button>
+                 </div>
+                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                   {proximosCursos.map(p => (
+                     <div key={p.id} className="bg-white p-6 rounded-3xl border border-slate-200 flex justify-between items-center shadow-sm">
+                       <div>
+                         <h4 className="font-black text-sm uppercase text-slate-900">{p.nombre}</h4>
+                         <p className="text-[10px] text-orange-500 font-black uppercase mt-1">{p.fecha}</p>
+                       </div>
+                       <button onClick={() => handleDelete('proximos', p.id)} className="p-3 text-slate-200 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"><Trash2 className="w-4 h-4" /></button>
+                     </div>
+                   ))}
+                 </div>
+               </div>
+            </div>
+          )}
+
+          {activeTab === 'oposicion' && selectedOpo && (
+            <div className="max-w-5xl mx-auto space-y-12">
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between bg-white p-12 rounded-[3.5rem] border-2 border-slate-50 shadow-sm relative overflow-hidden gap-8">
+                <div className="absolute top-0 left-0 w-2 h-full bg-orange-500"></div>
+                <div>
+                  <h2 className="text-5xl font-black text-slate-900 uppercase tracking-tighter">{selectedOpo}</h2>
+                  <p className="text-slate-400 font-black text-xs uppercase tracking-[0.4em] mt-4">Gestión de recursos académicos</p>
+                </div>
+                {isAdmin && (
+                  <button 
+                    onClick={() => { resetFormData(); setShowModal('documento'); }} 
+                    className="bg-orange-500 text-white px-6 py-4 rounded-2xl font-black uppercase text-[11px] tracking-[0.15em] shadow-xl shadow-orange-500/20 flex items-center justify-center gap-3 hover:scale-105 transition-all self-start"
+                  >
+                    <PlusCircle className="w-5 h-5" /> Añadir Material
+                  </button>
+                )}
+              </div>
+
+              <div className="space-y-16">
+                {Object.entries(TIPO_MATERIAL).map(([key, config]) => {
+                    const materialFiltrado = documentos.filter(d => d.oposicion === selectedOpo && d.tipo === key);
+                    if (materialFiltrado.length === 0 && !isAdmin) return null;
+
+                    return (
+                    <section key={key} className="space-y-6">
+                        <div className="flex items-center gap-6 px-4">
+                            <div className={`p-4 rounded-2xl shadow-sm ${config.color}`}>{config.icon}</div>
+                            <h3 className="text-xl font-black uppercase text-slate-900 tracking-widest">{config.label}</h3>
+                            <div className="flex-1 h-px bg-slate-100"></div>
+                        </div>
+                        <div className="grid grid-cols-1 gap-4">
+                        {materialFiltrado.length > 0 ? (
+                            materialFiltrado.sort((a,b) => b.timestamp - a.timestamp).map(doc => (
+                            <div key={doc.id} className="bg-white p-8 rounded-[2.5rem] border border-slate-100 flex items-center justify-between group hover:border-orange-500/30 hover:shadow-xl transition-all">
+                                <div className="flex items-center gap-6">
+                                <div className="p-4 bg-slate-50 rounded-2xl text-slate-300 group-hover:text-orange-500 group-hover:bg-orange-50 transition-all"><Download className="w-6 h-6" /></div>
+                                <div>
+                                    <h4 className="font-black text-lg text-slate-900">{doc.titulo}</h4>
+                                    <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest mt-1 block">Recurso verificado</span>
+                                </div>
+                                </div>
+                                <div className="flex items-center gap-4">
+                                <a href={doc.url} target="_blank" className="px-8 py-3 bg-slate-900 text-white rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-orange-600 transition-all shadow-lg shadow-slate-900/10">Descargar</a>
+                                {isAdmin && <button onClick={() => handleDelete('documentacion', doc.id)} className="p-3 text-slate-200 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"><Trash2 className="w-5 h-5" /></button>}
+                                </div>
+                            </div>
+                            ))
+                        ) : (
+                            <div className="text-center py-12 bg-slate-50/50 rounded-[2.5rem] border-2 border-dashed border-slate-100">
+                            <p className="text-slate-300 font-black uppercase tracking-[0.4em] text-xs">Sin archivos disponibles</p>
+                            </div>
+                        )}
+                        </div>
+                    </section>
+                    );
+                })}
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'alumnos' && isAdmin && (
+             <div className="max-w-6xl mx-auto space-y-12">
+                <div className="flex justify-between items-center mb-12">
+                    <h2 className="text-4xl font-black uppercase tracking-tight text-slate-900">Registro de Alumnos</h2>
+                    <button onClick={() => { resetFormData(); setShowModal('alumno'); }} className="bg-orange-500 text-white px-8 py-4 rounded-2xl font-black uppercase text-xs tracking-widest flex items-center gap-3 shadow-2xl shadow-orange-500/30 hover:scale-105 transition-all"><UserPlus className="w-5 h-5" /> Nueva Matrícula</button>
+                </div>
+                <div className="bg-white rounded-[3.5rem] border-2 border-slate-50 overflow-hidden shadow-2xl shadow-slate-200/50">
+                    <table className="w-full text-left">
+                        <thead className="bg-slate-50 border-b-2 border-slate-100 text-[11px] font-black uppercase text-slate-400">
+                            <tr>
+                                <th className="p-8">Nombre Completo</th>
+                                <th className="p-8">Acceso</th>
+                                <th className="p-8">Curso Activo</th>
+                                <th className="p-8 text-right">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y-2 divide-slate-50">
+                            {listaAlumnos.filter(a => a.username !== 'admin').map(a => (
+                                <tr key={a.id} className="hover:bg-orange-50/30 transition-all group">
+                                    <td className="p-8 font-black text-slate-900 text-base">{a.nombre}</td>
+                                    <td className="p-8">
+                                      <div className="bg-slate-100 px-4 py-2 rounded-xl inline-block">
+                                        <span className="text-slate-500 font-mono text-[11px] font-bold">U: {a.username}</span>
+                                        <span className="text-slate-300 mx-2">|</span>
+                                        <span className="text-slate-400 font-mono text-[11px]">P: {a.password}</span>
+                                      </div>
+                                    </td>
+                                    <td className="p-8">
+                                      <span className="px-4 py-2 bg-white text-orange-600 rounded-xl font-black text-[10px] uppercase border-2 border-orange-100 shadow-sm">
+                                        {a.oposicion}
+                                      </span>
+                                    </td>
+                                    <td className="p-8 text-right space-x-2">
+                                        <button onClick={() => { setEditingId(a.id); setFormData({...a}); setShowModal('alumno'); }} className="p-4 text-slate-200 hover:text-orange-500 hover:bg-white rounded-2xl transition-all shadow-sm group-hover:shadow-md"><Pencil className="w-5 h-5" /></button>
+                                        <button onClick={() => handleDelete('usuarios', a.id)} className="p-4 text-slate-200 hover:text-red-500 hover:bg-white rounded-2xl transition-all shadow-sm group-hover:shadow-md"><Trash2 className="w-5 h-5" /></button>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+             </div>
+          )}
+        </main>
+      </div>
+
+      {/* --- MODALES --- */}
+      
+      {showModal === 'noticia' && (
+        <Modal title="Redactar Noticia" onClose={() => setShowModal(null)}>
+          <form onSubmit={async (e) => {
+              e.preventDefault();
+              await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'noticias'), { 
+                titulo: formData.titulo, 
+                contenido: formData.contenido, 
+                url: formData.url || '', 
+                date: new Date().toLocaleDateString(), 
+                timestamp: Date.now() 
+              });
+              setShowModal(null); resetFormData();
+          }} className="space-y-6">
+            <input required className="w-full p-6 bg-slate-50 border-2 border-transparent focus:border-orange-500/30 focus:bg-white rounded-3xl outline-none text-base font-black uppercase tracking-tight transition-all" placeholder="Título impactante..." value={formData.titulo} onChange={e => setFormData({...formData, titulo: e.target.value})} />
+            <textarea required rows="6" className="w-full p-6 bg-slate-50 border-2 border-transparent focus:border-orange-500/30 focus:bg-white rounded-3xl outline-none text-base resize-none transition-all" placeholder="Cuerpo del mensaje..." value={formData.contenido} onChange={e => setFormData({...formData, contenido: e.target.value})} />
+            <input className="w-full p-5 bg-slate-50 border-2 border-transparent focus:border-orange-500/30 focus:bg-white rounded-3xl outline-none text-xs font-mono" placeholder="Enlace opcional (HTTP://...)" value={formData.url} onChange={e => setFormData({...formData, url: e.target.value})} />
+            <button type="submit" className="w-full bg-orange-500 text-white py-6 rounded-[2rem] font-black uppercase tracking-[0.2em] shadow-2xl shadow-orange-500/30 hover:brightness-110 active:scale-95 transition-all text-sm">Publicar en el Tablón</button>
+          </form>
+        </Modal>
+      )}
+
+      {showModal === 'proximo' && (
+        <Modal title="Añadir a la Agenda" onClose={() => setShowModal(null)}>
+          <form onSubmit={async (e) => {
+              e.preventDefault();
+              await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'proximos'), { 
+                nombre: formData.nombre, 
+                fecha: formData.fecha, 
+                timestamp: Date.now() 
+              });
+              setShowModal(null); resetFormData();
+          }} className="space-y-6">
+            <input required className="w-full p-6 bg-slate-50 border-2 border-transparent focus:border-orange-500/30 rounded-3xl outline-none text-base font-black uppercase tracking-tight" placeholder="Nombre del evento/curso..." value={formData.nombre} onChange={e => setFormData({...formData, nombre: e.target.value})} />
+            <input required className="w-full p-6 bg-slate-50 border-2 border-transparent focus:border-orange-500/30 rounded-3xl outline-none text-base font-bold text-orange-600" placeholder="Fecha (ej: Octubre 2024)" value={formData.fecha} onChange={e => setFormData({...formData, fecha: e.target.value})} />
+            <button type="submit" className="w-full bg-orange-500 text-white py-6 rounded-[2rem] font-black uppercase tracking-widest shadow-2xl shadow-orange-500/30">Crear Anuncio</button>
+          </form>
+        </Modal>
+      )}
+
+      {showModal === 'curso' && (
+        <Modal title={editingId ? "Editar Configuración" : "Definir Nuevo Curso"} onClose={() => setShowModal(null)}>
+          <form onSubmit={async (e) => {
+              e.preventDefault();
+              const data = { 
+                nombre: formData.nombre, 
+                descripcion: formData.descripcion, 
+                lanzamiento: formData.lanzamiento || '' 
+              };
+              if (editingId) await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'categorias', editingId), data);
+              else await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'categorias'), { ...data, timestamp: Date.now() });
+              setShowModal(null); resetFormData();
+          }} className="space-y-6">
+            <input required className="w-full p-6 bg-slate-50 border-2 border-transparent focus:border-orange-500/30 rounded-3xl outline-none text-lg font-black uppercase tracking-tight" placeholder="Nombre de la Oposición/Curso" value={formData.nombre} onChange={e => setFormData({...formData, nombre: e.target.value})} />
+            <input className="w-full p-6 bg-slate-50 border-2 border-transparent focus:border-orange-500/30 rounded-3xl outline-none text-base font-black text-orange-600 uppercase" placeholder="Fecha lanzamiento (ej: Octubre 2024)" value={formData.lanzamiento} onChange={e => setFormData({...formData, lanzamiento: e.target.value})} />
+            <textarea rows="4" className="w-full p-6 bg-slate-50 border-2 border-transparent focus:border-orange-500/30 rounded-3xl outline-none text-base resize-none" placeholder="Breve descripción del curso para los alumnos..." value={formData.descripcion} onChange={e => setFormData({...formData, descripcion: e.target.value})} />
+            <button type="submit" className="w-full bg-orange-500 text-white py-6 rounded-[2rem] font-black uppercase tracking-widest shadow-2xl shadow-orange-500/30">
+              {editingId ? "Actualizar Curso" : "Crear Curso"}
+            </button>
+          </form>
+        </Modal>
+      )}
+
+      {showModal === 'alumno' && (
+        <Modal title={editingId ? "Ficha del Alumno" : "Matriculación Express"} onClose={() => setShowModal(null)}>
+          <form onSubmit={async (e) => {
+              e.preventDefault();
+              const data = { nombre: formData.nombre, username: formData.username, password: formData.password, oposicion: formData.oposicion || 'Todas' };
+              if (editingId) await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'usuarios', editingId), data);
+              else await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'usuarios'), data);
+              setShowModal(null); resetFormData();
+          }} className="space-y-6">
+            <input required className="w-full p-6 bg-slate-50 border-2 border-transparent focus:border-orange-500/30 rounded-3xl outline-none text-base font-bold" placeholder="Nombre completo del alumno..." value={formData.nombre} onChange={e => setFormData({...formData, nombre: e.target.value})} />
+            <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase ml-4">Usuario</label>
+                    <input required className="w-full p-5 bg-slate-50 border-2 border-transparent focus:border-orange-500/30 rounded-3xl outline-none text-base font-mono" placeholder="ID" value={formData.username} onChange={e => setFormData({...formData, username: e.target.value})} />
+                </div>
+                <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase ml-4">Clave</label>
+                    <input required className="w-full p-5 bg-slate-50 border-2 border-transparent focus:border-orange-500/30 rounded-3xl outline-none text-base font-mono" placeholder="PIN" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} />
+                </div>
+            </div>
+            <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase ml-4">Asignar curso</label>
+                <select required className="w-full p-6 bg-slate-50 border-2 border-transparent focus:border-orange-500/30 rounded-3xl outline-none text-base font-black text-slate-800 uppercase appearance-none" value={formData.oposicion} onChange={e => setFormData({...formData, oposicion: e.target.value})}>
+                <option value="">-- Elige un curso --</option>
+                <option value="Todas">Acceso Total</option>
+                {categoriasOposicion.map(c => <option key={c.id} value={c.nombre}>{c.nombre}</option>)}
+                </select>
+            </div>
+            <button type="submit" className="w-full bg-orange-500 text-white py-6 rounded-[2rem] font-black uppercase tracking-widest shadow-2xl shadow-orange-500/30">Guardar Alumno</button>
+          </form>
+        </Modal>
+      )}
+
+      {showModal === 'documento' && (
+        <Modal title={`Recurso para: ${selectedOpo}`} onClose={() => setShowModal(null)}>
+          <form onSubmit={async (e) => {
+              e.preventDefault();
+              await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'documentacion'), { 
+                titulo: formData.titulo, 
+                url: formData.url, 
+                tipo: formData.tipo, 
+                oposicion: selectedOpo, 
+                timestamp: Date.now() 
+              });
+              setShowModal(null); resetFormData();
+          }} className="space-y-6">
+            <div className="grid grid-cols-2 gap-3">
+                {Object.entries(TIPO_MATERIAL).map(([key, config]) => (
+                    <button key={key} type="button" onClick={() => setFormData({...formData, tipo: key})} className={`p-5 rounded-3xl border-4 text-[11px] font-black uppercase flex items-center justify-center gap-3 transition-all ${formData.tipo === key ? 'border-orange-500 bg-orange-50 text-orange-900 shadow-lg shadow-orange-500/10' : 'border-slate-50 text-slate-400 hover:border-slate-100 hover:bg-slate-50'}`}>
+                        {config.icon} {config.label}
+                    </button>
+                ))}
+            </div>
+            <input required className="w-full p-6 bg-slate-50 border-2 border-transparent focus:border-orange-500/30 rounded-3xl outline-none text-base font-black uppercase" placeholder="Título del archivo o video..." value={formData.titulo} onChange={e => setFormData({...formData, titulo: e.target.value})} />
+            <input required className="w-full p-6 bg-slate-50 border-2 border-transparent focus:border-orange-500/30 rounded-3xl outline-none text-xs font-mono" placeholder="Pegar URL de descarga o video..." value={formData.url} onChange={e => setFormData({...formData, url: e.target.value})} />
+            <button type="submit" className="w-full bg-orange-500 text-white py-6 rounded-[2rem] font-black uppercase tracking-widest shadow-2xl shadow-orange-500/30">Publicar Material</button>
+          </form>
+        </Modal>
+      )}
+    </div>
+  );
+}
