@@ -1,5 +1,0 @@
-Quiero crear una plataforma para mi empresa de formación online. Me dedico a formar alumnos para diferentes oposiciones y necesito un espacio para interacturar con los alumnos, colgar los termarios, chatear con ellos, poner exámenes y pruebas, colgar videos y diapositivas, etc.
-
-Quiero tener una clave como administrador para gestionar la plataforma y subir la documentación y poder dar a cada alumno un usuario.
-
-La aplicación se llamaría E-formación y dentro de ella tendría que haber un portal de noticias donde yo pondré enlaces a las distintas convocatorias, videos de motivación.... Luego tendría un espacio para las distintas oposiciones, auxiliar administrativo, adminstrativo, correos, trabajo social... y dentro de cada una de ellas todo lo que te he comentado antes.
